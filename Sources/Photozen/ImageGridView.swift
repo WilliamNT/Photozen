@@ -163,9 +163,11 @@ struct PhotoGrid: View {
                                         .foregroundStyle(.secondary)
                                 }
                             } else {
-                                Text("Updated Just Now")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                TimelineView(.periodic(from: .now, by: 30)) { context in
+                                    Text(relativeUpdateText(now: context.date))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
                         .frame(maxWidth: .infinity)
@@ -197,6 +199,25 @@ struct PhotoGrid: View {
         let available = max(0, width - horizontalPadding)
         let count = max(1, Int((available + spacing) / (cellSize + spacing)))
         columnsPerRow = count
+    }
+
+    private func relativeUpdateText(now: Date) -> String {
+        guard let lastUpdated = model.lastUpdated else {
+            return "Updated Just Now"
+        }
+        let elapsed = now.timeIntervalSince(lastUpdated)
+        if elapsed < 60 {
+            return "Updated Just Now"
+        } else if elapsed < 3600 {
+            let mins = Int(elapsed / 60)
+            return "Updated \(mins) min\(mins == 1 ? "" : "s") ago"
+        } else if elapsed < 86400 {
+            let hours = Int(elapsed / 3600)
+            return "Updated \(hours) hour\(hours == 1 ? "" : "s") ago"
+        } else {
+            let days = Int(elapsed / 86400)
+            return "Updated \(days) day\(days == 1 ? "" : "s") ago"
+        }
     }
 }
 

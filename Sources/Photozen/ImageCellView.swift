@@ -17,11 +17,12 @@ struct ImageCellView: View {
 
     @State private var thumbnail: NSImage?
     @State private var lastTapTime: Date?
+    @State private var isHovered = false
     @EnvironmentObject var model: PhotozenModel
 
     var body: some View {
         VStack(spacing: 0) {
-            ZStack {
+            ZStack(alignment: .bottom) {
                 if let thumbnail {
                     Image(nsImage: thumbnail)
                         .resizable()
@@ -51,6 +52,28 @@ struct ImageCellView: View {
                             }
                         }
                 }
+
+                // Filename overlay on hover
+                if isHovered {
+                    Text(item.name)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            LinearGradient(
+                                colors: [.clear, .black.opacity(0.55)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .clipShape(UnevenRoundedRectangle(bottomLeadingRadius: 4, bottomTrailingRadius: 4))
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
             }
             .aspectRatio(1, contentMode: .fit)
             .contentShape(Rectangle())
@@ -63,6 +86,15 @@ struct ImageCellView: View {
                 )
             }
         )
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
+        .help(item.name)
+        .onDrag {
+            NSItemProvider(object: item.url as NSURL)
+        }
         .onTapGesture {
             let now = Date()
             if let last = lastTapTime, now.timeIntervalSince(last) < 0.35 {

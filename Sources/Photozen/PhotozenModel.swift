@@ -19,6 +19,7 @@ final class PhotozenModel: ObservableObject {
     @Published var searchFocusTrigger = 0
     @Published private(set) var filteredImages: [ImageItem] = []
     @Published private(set) var dateGroups: [DateGroup] = []
+    @Published private(set) var lastUpdated: Date?
 
     func focusSearch() {
         searchFocusTrigger &+= 1
@@ -332,6 +333,7 @@ final class PhotozenModel: ObservableObject {
                 indexedCount = cached.items.count
                 isScanning = false
                 scanError = nil
+                lastUpdated = cached.lastScanned
             }
 
             // 2. Check for filesystem changes in background
@@ -400,6 +402,7 @@ final class PhotozenModel: ObservableObject {
 
         if scanCounter == generation, affectsUI {
             isScanning = false
+            lastUpdated = Date()
         }
     }
 
@@ -411,6 +414,7 @@ final class PhotozenModel: ObservableObject {
         defer {
             if affectsUI {
                 isRefreshing = false
+                lastUpdated = Date()
             }
         }
 

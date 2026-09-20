@@ -1104,6 +1104,9 @@ struct ImageViewerView: View {
                     .clipShape(RoundedRectangle(cornerRadius: effectiveCornerRadius, style: .continuous))
                     .scaleEffect(currentScale * effectiveFlightScale)
                     .offset(effectiveOffset)
+                    .onDrag {
+                        NSItemProvider(object: controller.currentItem.url as NSURL)
+                    }
             } else {
                 ProgressView()
                     .scaleEffect(1.2)
@@ -1840,45 +1843,32 @@ struct PhotoInfoMapView: View {
             GridItem(.flexible(), spacing: 10),
             GridItem(.flexible(), spacing: 10)
         ]
+        let coord = metadata?.coordinate
 
         LazyVGrid(columns: columns, spacing: 10) {
-            // Pill 1: Open in Apple Maps (System Blue map icon)
-            if let coord = metadata?.coordinate {
-                ApplePillButton(icon: "map", title: "Open in Maps", iconTint: .blue) {
-                    openInAppleMaps(coordinate: coord)
-                }
-            } else {
-                ApplePillButton(icon: "doc.text", title: "Copy Summary", iconTint: .secondary, isCopied: copiedSummary) {
-                    copyToClipboard(metadata?.formattedSummary ?? item.name)
-                    copiedSummary = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copiedSummary = false }
-                }
+            // Pill 1: Open in Apple Maps
+            ApplePillButton(icon: "map", title: "Open in Maps", iconTint: coord != nil ? .blue : .secondary) {
+                if let coord { openInAppleMaps(coordinate: coord) }
             }
+            .disabled(coord == nil)
 
-            // Pill 2: Copy Coordinates or Dimensions (System Red pin icon)
-            if let coord = metadata?.coordinate {
-                let coordsText = metadata?.formattedCoordinatesDecimal ?? "\(coord.latitude), \(coord.longitude)"
-                ApplePillButton(icon: "mappin.and.ellipse", title: copiedCoordinates ? "Copied!" : "Coordinates", iconTint: .red, isCopied: copiedCoordinates) {
+            // Pill 2: Copy Coordinates
+            ApplePillButton(icon: "mappin.and.ellipse", title: copiedCoordinates ? "Copied!" : "Coordinates", iconTint: coord != nil ? .red : .secondary, isCopied: copiedCoordinates) {
+                if let coord {
+                    let coordsText = metadata?.formattedCoordinatesDecimal ?? "\(coord.latitude), \(coord.longitude)"
                     copyToClipboard(coordsText)
                     copiedCoordinates = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copiedCoordinates = false }
                 }
-            } else {
-                ApplePillButton(icon: "aspectratio", title: copiedDimensions ? "Copied!" : (metadata?.formattedDimensions ?? "Dimensions"), iconTint: .secondary, isCopied: copiedDimensions) {
-                    if let dim = metadata?.formattedDimensions {
-                        copyToClipboard(dim)
-                        copiedDimensions = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copiedDimensions = false }
-                    }
-                }
             }
+            .disabled(coord == nil)
 
-            // Pill 3: Reveal in Finder (System Blue folder icon)
+            // Pill 3: Reveal in Finder
             ApplePillButton(icon: "folder", title: "Reveal in Finder", iconTint: .blue) {
                 NSWorkspace.shared.activateFileViewerSelecting([item.url])
             }
 
-            // Pill 4: Copy File Path (Muted doc icon)
+            // Pill 4: Copy File Path
             ApplePillButton(icon: "doc.on.doc", title: copiedPath ? "Copied!" : "Copy Path", iconTint: .secondary, isCopied: copiedPath) {
                 copyToClipboard(item.path)
                 copiedPath = true
@@ -2023,18 +2013,12 @@ struct PhotoInfoMapView: View {
             }
             .frame(maxWidth: .infinity, alignment: .center)
         } else {
-            VStack(spacing: 12) {
-                Image(systemName: "mappin.slash")
-                    .font(.system(size: 36, weight: .light))
-                    .foregroundStyle(.tertiary)
-                Text("No GPS Information")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-                Text("This image does not contain location coordinates.")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+            ContentUnavailableView {
+                Label("No Location Information", systemImage: "mappin.slash")
+            } description: {
+                Text("This photo doesn't contain GPS coordinates. Location data is typically embedded by cameras and phones at the time a photo is taken.")
             }
-            .frame(maxWidth: 1100, minHeight: 220)
+            .frame(maxWidth: 1100, minHeight: 260)
             .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, alignment: .center)
         }
