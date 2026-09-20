@@ -41,6 +41,14 @@ struct PhotozenApp: App {
                 .keyboardShortcut(.delete, modifiers: [.command])
             }
 
+            CommandGroup(replacing: .printItem) {
+                Button("Print…") {
+                    model.printCurrentImage()
+                }
+                .keyboardShortcut("p", modifiers: [.command])
+                .disabled(!model.canPrint)
+            }
+
             CommandGroup(after: .pasteboard) {
                 Divider()
                 Menu("Find") {
@@ -90,6 +98,24 @@ struct PhotozenApp: App {
                         model.filter.sortByDate = false
                     }
                 }
+
+                Divider()
+
+                Button("Enter Full Screen") {
+                    if let window = NSApp.keyWindow ?? NSApp.mainWindow {
+                        window.toggleFullScreen(nil)
+                    }
+                }
+                .keyboardShortcut("f", modifiers: [.command, .control])
+            }
+
+            CommandGroup(replacing: .help) {
+                Button("Keyboard Shortcuts") {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        model.showKeyboardShortcuts.toggle()
+                    }
+                }
+                .keyboardShortcut("/", modifiers: [.command])
             }
         }
     }

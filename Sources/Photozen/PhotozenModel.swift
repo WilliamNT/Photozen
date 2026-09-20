@@ -17,6 +17,7 @@ final class PhotozenModel: ObservableObject {
     @Published var presentFolderPicker = false
     @Published var isInfoOpen = false
     @Published var searchFocusTrigger = 0
+    @Published var showKeyboardShortcuts = false
     @Published private(set) var filteredImages: [ImageItem] = []
     @Published private(set) var dateGroups: [DateGroup] = []
     @Published private(set) var lastUpdated: Date?
@@ -54,6 +55,33 @@ final class PhotozenModel: ObservableObject {
 
     var hasAnyImages: Bool {
         !images.isEmpty
+    }
+
+    /// Set by ContentView to the URL of the currently viewed or selected image.
+    @Published var printableImageURL: URL? = nil
+
+    var canPrint: Bool {
+        printableImageURL != nil
+    }
+
+    func printCurrentImage() {
+        guard let url = printableImageURL,
+              let image = NSImage(contentsOf: url) else { return }
+
+        let imageView = NSImageView(frame: NSRect(origin: .zero, size: image.size))
+        imageView.image = image
+        imageView.imageScaling = .scaleProportionallyDown
+
+        let printInfo = NSPrintInfo.shared.copy() as! NSPrintInfo
+        printInfo.horizontalPagination = .fit
+        printInfo.verticalPagination = .fit
+        printInfo.isHorizontallyCentered = true
+        printInfo.isVerticallyCentered = true
+
+        let operation = NSPrintOperation(view: imageView, printInfo: printInfo)
+        operation.showsPrintPanel = true
+        operation.showsProgressPanel = true
+        operation.run()
     }
 
     init() {

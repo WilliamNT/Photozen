@@ -115,6 +115,12 @@ struct ImageCellView: View {
             ShareLink(item: item.url) {
                 Label("Share…", systemImage: "square.and.arrow.up")
             }
+            Button {
+                model.printableImageURL = item.url
+                model.printCurrentImage()
+            } label: {
+                Label("Print…", systemImage: "printer")
+            }
             Button("Get Info") {
                 onSelect()
                 onOpen()

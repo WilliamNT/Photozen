@@ -566,7 +566,13 @@ final class ImageViewerController: NSObject, ObservableObject {
         shareItem.image = NSImage(systemSymbolName: "square.and.arrow.up", accessibilityDescription: nil)
         menu.addItem(shareItem)
 
-        // 3. Reveal in Finder
+        // 3. Print…
+        let printItem = NSMenuItem(title: "Print…", action: #selector(contextPrintAction(_:)), keyEquivalent: "p")
+        printItem.target = self
+        printItem.image = NSImage(systemSymbolName: "printer", accessibilityDescription: nil)
+        menu.addItem(printItem)
+
+        // 4. Reveal in Finder
         let revealItem = NSMenuItem(title: "Reveal in Finder", action: #selector(contextRevealAction(_:)), keyEquivalent: "")
         revealItem.target = self
         revealItem.image = NSImage(systemSymbolName: "folder", accessibilityDescription: nil)
@@ -574,7 +580,7 @@ final class ImageViewerController: NSObject, ObservableObject {
 
         menu.addItem(.separator())
 
-        // 4. Open With submenu
+        // 5. Open With submenu
         let openWithItem = NSMenuItem(title: "Open With", action: nil, keyEquivalent: "")
         openWithItem.image = NSImage(systemSymbolName: "arrow.up.forward.app", accessibilityDescription: nil)
         let openWithSubmenu = NSMenu(title: "Open With")
@@ -606,7 +612,7 @@ final class ImageViewerController: NSObject, ObservableObject {
 
         menu.addItem(.separator())
 
-        // 5. Get Info / Hide Info (⌘I)
+        // 6. Get Info / Hide Info (⌘I)
         let infoTitle = isInfoPanelOpen ? "Hide Info" : "Get Info"
         let infoItem = NSMenuItem(title: infoTitle, action: #selector(contextToggleInfoAction(_:)), keyEquivalent: "i")
         infoItem.target = self
@@ -633,6 +639,24 @@ final class ImageViewerController: NSObject, ObservableObject {
 
     @objc private func contextRevealAction(_ sender: Any?) {
         NSWorkspace.shared.activateFileViewerSelecting([currentItem.url])
+    }
+
+    @objc private func contextPrintAction(_ sender: Any?) {
+        guard let image = NSImage(contentsOf: currentItem.url) else { return }
+        let imageView = NSImageView(frame: NSRect(origin: .zero, size: image.size))
+        imageView.image = image
+        imageView.imageScaling = .scaleProportionallyDown
+
+        let printInfo = NSPrintInfo.shared.copy() as! NSPrintInfo
+        printInfo.horizontalPagination = .fit
+        printInfo.verticalPagination = .fit
+        printInfo.isHorizontallyCentered = true
+        printInfo.isVerticallyCentered = true
+
+        let operation = NSPrintOperation(view: imageView, printInfo: printInfo)
+        operation.showsPrintPanel = true
+        operation.showsProgressPanel = true
+        operation.run()
     }
 
     @objc private func contextOpenWithAppAction(_ sender: NSMenuItem) {

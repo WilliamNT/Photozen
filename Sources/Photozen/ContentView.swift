@@ -7,6 +7,8 @@ struct ContentView: View {
     @State private var gridColumnsPerRow = 6
     @State private var cellFrames: [UUID: CGRect] = [:]
     @State private var isSearchPresented = false
+    @State private var isFullScreen = false
+    @State private var cursorHideTask: Task<Void, Never>?
     @FocusState private var isDetailFocused: Bool
 
     var body: some View {
@@ -39,6 +41,11 @@ struct ContentView: View {
                     )
                     .transition(.opacity)
                 }
+
+                if model.showKeyboardShortcuts {
+                    KeyboardShortcutsOverlay(isPresented: $model.showKeyboardShortcuts)
+                        .zIndex(100)
+                }
             }
             .coordinateSpace(name: "viewerSpace")
             .onPreferenceChange(GridCellFramesKey.self) { frames in
@@ -48,8 +55,8 @@ struct ContentView: View {
             .focusEffectDisabled()
             .focused($isDetailFocused)
         }
-        .navigationTitle(viewerItem != nil ? viewerItem!.name : model.currentTitle)
-        .navigationSubtitle(navigationSubtitleText)
+        .navigationTitle(fullScreenViewer ? "" : (viewerItem != nil ? viewerItem!.name : model.currentTitle))
+        .navigationSubtitle(fullScreenViewer ? "" : navigationSubtitleText)
         .searchable(text: $model.filter.text, isPresented: $isSearchPresented, placement: .toolbar, prompt: "Search Photos")
         .onChange(of: model.searchFocusTrigger) { _, _ in
             activateSearch()
@@ -76,12 +83,41 @@ struct ContentView: View {
                     activateSearch()
                 }
                 .keyboardShortcut("f", modifiers: [.command])
+
+                Button("") {
+                    if let viewerItem {
+                        printImage(url: viewerItem.url)
+                    } else if let id = selectedImageID,
+                              let item = model.filteredImages.first(where: { $0.id == id }) {
+                        printImage(url: item.url)
+                    }
+                }
+                .keyboardShortcut("p", modifiers: [.command])
             }
             .opacity(0)
             .frame(width: 0, height: 0)
         }
         .onAppear {
             isDetailFocused = true
+        }
+        .onChange(of: viewerItem) { _, newItem in
+            if let newItem {
+                model.printableImageURL = newItem.url
+            } else if let id = selectedImageID,
+                      let item = model.filteredImages.first(where: { $0.id == id }) {
+                model.printableImageURL = item.url
+            } else {
+                model.printableImageURL = nil
+            }
+        }
+        .onChange(of: selectedImageID) { _, newID in
+            if viewerItem == nil {
+                if let id = newID, let item = model.filteredImages.first(where: { $0.id == id }) {
+                    model.printableImageURL = item.url
+                } else {
+                    model.printableImageURL = nil
+                }
+            }
         }
         .onKeyPress(.return) {
             if viewerItem == nil, selectedImageID != nil {
@@ -103,6 +139,10 @@ struct ContentView: View {
         .onKeyPress(.escape) {
             if isSearchPresented && !model.filter.text.isEmpty {
                 model.filter.text = ""
+                return .handled
+            }
+            if fullScreenViewer {
+                toggleFullScreen()
                 return .handled
             }
             if viewerItem != nil {
@@ -143,6 +183,19 @@ struct ContentView: View {
             }
             return .handled
         }
+        .onKeyPress(characters: CharacterSet(charactersIn: "f")) { _ in
+            if viewerItem != nil {
+                toggleFullScreen()
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress(characters: CharacterSet(charactersIn: "?")) { _ in
+            withAnimation(.easeOut(duration: 0.15)) {
+                model.showKeyboardShortcuts.toggle()
+            }
+            return .handled
+        }
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 if viewerItem != nil {
@@ -167,6 +220,7 @@ struct ContentView: View {
                 }
             }
         }
+        .toolbar(fullScreenViewer ? .hidden : .automatic, for: .windowToolbar)
         .animation(.easeOut(duration: 0.12), value: viewerItem)
         .onChange(of: model.presentFolderPicker) { _, isPresented in
             if isPresented {
@@ -179,6 +233,40 @@ struct ContentView: View {
                 viewerItem = nil
             }
         }
+        .onChange(of: fullScreenViewer) { _, isActive in
+            if isActive {
+                scheduleCursorHide()
+            } else {
+                cursorHideTask?.cancel()
+                NSCursor.setHiddenUntilMouseMoves(false)
+            }
+        }
+        .onContinuousHover { phase in
+            if fullScreenViewer {
+                switch phase {
+                case .active:
+                    NSCursor.setHiddenUntilMouseMoves(false)
+                    scheduleCursorHide()
+                case .ended:
+                    break
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { notification in
+            if let window = notification.object as? NSWindow, window == NSApp.keyWindow {
+                isFullScreen = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { notification in
+            if let window = notification.object as? NSWindow, window == NSApp.keyWindow {
+                isFullScreen = false
+            }
+        }
+    }
+
+    /// Whether the viewer is active in full-screen mode (immersive photo viewing)
+    private var fullScreenViewer: Bool {
+        isFullScreen && viewerItem != nil
     }
 
     private var navigationSubtitleText: String {
@@ -205,6 +293,38 @@ struct ContentView: View {
         guard let id = selectedImageID,
               let item = model.filteredImages.first(where: { $0.id == id }) else { return }
         viewerItem = item
+    }
+
+    private func printImage(url: URL) {
+        guard let image = NSImage(contentsOf: url) else { return }
+        let imageView = NSImageView(frame: NSRect(origin: .zero, size: image.size))
+        imageView.image = image
+        imageView.imageScaling = .scaleProportionallyDown
+
+        let printInfo = NSPrintInfo.shared.copy() as! NSPrintInfo
+        printInfo.horizontalPagination = .fit
+        printInfo.verticalPagination = .fit
+        printInfo.isHorizontallyCentered = true
+        printInfo.isVerticallyCentered = true
+
+        let operation = NSPrintOperation(view: imageView, printInfo: printInfo)
+        operation.showsPrintPanel = true
+        operation.showsProgressPanel = true
+        operation.run()
+    }
+
+    private func toggleFullScreen() {
+        guard let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }
+        window.toggleFullScreen(nil)
+    }
+
+    private func scheduleCursorHide() {
+        cursorHideTask?.cancel()
+        cursorHideTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled, fullScreenViewer else { return }
+            NSCursor.setHiddenUntilMouseMoves(true)
+        }
     }
 
     private func activateSearch() {
